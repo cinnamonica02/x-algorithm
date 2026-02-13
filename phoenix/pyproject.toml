@@ -9,6 +9,8 @@ dependencies = [
     "jax==0.8.1",
     "numpy>=1.26.4",
     "pandas>=2.0.0",
+    "optax>=0.2.0",
+    "tqdm>=4.66.0",
     "pyright>=1.1.408",
 ]
 

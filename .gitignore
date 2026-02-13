@@ -1,1 +1,48 @@
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data files (large, can be regenerated)
+phoenix/retail_rocket/*.csv
+phoenix/data/processed/*.pkl
+phoenix/data/processed/*.npy
+
+# Keep small metadata files
+!phoenix/data/processed/statistics.json
+
+# Model checkpoints (large, training-specific)
+phoenix/checkpoints/
+checkpoints/
+*.ckpt
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Rust build artifacts (reference code only)
+target/
+Cargo.lock

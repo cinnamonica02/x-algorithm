@@ -1,0 +1,18 @@
+{
+  "num_users": 23221,
+  "num_products": 53594,
+  "num_categories": 924,
+  "num_brands": 924,
+  "num_actions": 3,
+  "total_interactions": 551571,
+  "seq_length_mean": 23.753111407777443,
+  "seq_length_median": 14.0,
+  "seq_length_min": 1,
+  "seq_length_max": 7585,
+  "seq_length_std": 90.57562585175327,
+  "action_distribution": {
+    "view": 505299,
+    "addtocart": 32637,
+    "transaction": 13635
+  }
+}

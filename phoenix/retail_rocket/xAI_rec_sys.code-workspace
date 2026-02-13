@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "xAI_rec_sys",
+			"path": "../xAI_rec_sys"
+		},
+		{
+			"name": "retail_rocket",
+			"path": "."
+		}
+	],
+	"settings": {}
+}

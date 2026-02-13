@@ -100,8 +100,7 @@ class EcommerceBatch(NamedTuple):
     labels: jax.typing.ArrayLike = None
 
 
-@dataclass
-class EcommerceEmbeddings:
+class EcommerceEmbeddings(NamedTuple):
     """Pre-looked-up embeddings from hash tables.
 
     Hash embeddings are combined via reduce functions in the model.

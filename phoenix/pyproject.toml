@@ -8,6 +8,7 @@ dependencies = [
     "dm-haiku>=0.0.13",
     "jax==0.8.1",
     "numpy>=1.26.4",
+    "pandas>=2.0.0",
     "pyright>=1.1.408",
 ]
 
@@ -15,6 +16,7 @@ dependencies = [
 environments = [
     "sys_platform == 'darwin'",
     "sys_platform == 'linux'",
+    "sys_platform == 'win32'",
 ]
 
 [tool.ruff]

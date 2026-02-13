@@ -18,40 +18,9 @@ import pickle
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
-from dataclasses import dataclass
 import jax.numpy as jnp
 
-
-@dataclass
-class EcommerceBatch:
-    """
-    Batch format for e-commerce recommendation models.
-
-    Follows the structure from REC_SYS_OUTLINE.md Phase 3.1:
-    - customer_hashes: [B, 2] - Two hash values per customer
-    - history_product_hashes: [B, seq_len, 2] - Two hash values per product
-    - history_brand_hashes: [B, seq_len, 2] - Two hash values per brand
-    - history_actions: [B, seq_len, 3] - Multi-hot action encoding (transaction, addtocart, view)
-    - history_category: [B, seq_len] - Category indices
-    - candidate_product_hashes: [B, C, 2] - For ranking model (C candidates)
-    - candidate_brand_hashes: [B, C, 2]
-    - candidate_category: [B, C]
-    - labels: [B, C, 3] - Multi-hot labels for candidates (what actions occurred)
-    """
-    # User/history features
-    customer_hashes: jnp.ndarray  # [B, 2]
-    history_product_hashes: jnp.ndarray  # [B, seq_len, 2]
-    history_brand_hashes: jnp.ndarray  # [B, seq_len, 2]
-    history_actions: jnp.ndarray  # [B, seq_len, 3]
-    history_category: jnp.ndarray  # [B, seq_len]
-
-    # Candidate features (for ranking)
-    candidate_product_hashes: Optional[jnp.ndarray] = None  # [B, C, 2]
-    candidate_brand_hashes: Optional[jnp.ndarray] = None  # [B, C, 2]
-    candidate_category: Optional[jnp.ndarray] = None  # [B, C]
-
-    # Labels
-    labels: Optional[jnp.ndarray] = None  # [B, C, 3]
+from ecommerce_config import EcommerceBatch
 
 
 def hash_id(item_id: int, num_buckets: int, hash_idx: int = 0) -> int:

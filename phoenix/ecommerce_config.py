@@ -97,6 +97,7 @@ class EcommerceBatch(NamedTuple):
     candidate_product_hashes: jax.typing.ArrayLike
     candidate_brand_hashes: jax.typing.ArrayLike
     candidate_category: jax.typing.ArrayLike
+    labels: jax.typing.ArrayLike = None
 
 
 @dataclass

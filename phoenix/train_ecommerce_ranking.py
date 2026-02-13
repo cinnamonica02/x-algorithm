@@ -1,7 +1,18 @@
+# Copyright 2026 E-commerce Adaptation Project
+# Licensed under the Apache License, Version 2.0
+
+"""Training script for e-commerce ranking model with JIT compilation."""
+
 import argparse
 import logging
+import os
 import pickle
 from pathlib import Path
+
+# Force GPU usage before importing JAX
+os.environ['JAX_PLATFORMS'] = 'cuda'
+os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
+os.environ['XLA_PYTHON_CLIENT_ALLOCATOR'] = 'platform'
 
 import jax
 import jax.numpy as jnp
@@ -65,36 +76,49 @@ def compute_metrics(logits, labels):
     return metrics
 
 
-def train_step(params, tables, opt_state, batch, model, optimizer, weights):
-    """Single training step with gradient update."""
-    def loss_fn(params):
+def create_train_step(model, optimizer, weights):
+    """Create JIT-compiled training step function."""
+
+    @jax.jit
+    def train_step_jit(params, tables, opt_state, batch):
+        """Single training step with gradient update (JIT-compiled)."""
+        def loss_fn(params):
+            embeddings = lookup_embeddings(batch, tables)
+            output = model.apply(params, None, batch, embeddings)
+            loss = weighted_bce_loss(output.logits, batch.labels, weights)
+            return loss, output.logits
+
+        (loss, logits), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
+        updates, opt_state = optimizer.update(grads, opt_state, params)
+        params = optax.apply_updates(params, updates)
+
+        return params, opt_state, loss, logits
+
+    return train_step_jit
+
+
+def create_eval_step(model):
+    """Create JIT-compiled evaluation step."""
+
+    @jax.jit
+    def eval_step_jit(params, tables, batch):
         embeddings = lookup_embeddings(batch, tables)
         output = model.apply(params, None, batch, embeddings)
-        loss = weighted_bce_loss(output.logits, batch.labels, weights)
-        return loss, output.logits
+        return output.logits
 
-    (loss, logits), grads = jax.value_and_grad(loss_fn, has_aux=True)(params)
-    updates, opt_state = optimizer.update(grads, opt_state, params)
-    params = optax.apply_updates(params, updates)
-
-    metrics = compute_metrics(logits, batch.labels)
-    metrics['loss'] = float(loss)
-
-    return params, opt_state, metrics
+    return eval_step_jit
 
 
-def evaluate(params, tables, dataset, model, num_batches, batch_size, hist_len, cand_len):
+def evaluate(eval_step, params, tables, dataset, num_batches, batch_size, hist_len, cand_len):
     """Evaluate model on validation set."""
     all_metrics = []
 
     for _ in range(num_batches):
         batch = dataset.get_batch(batch_size, hist_len, cand_len)
-        embeddings = lookup_embeddings(batch, tables)
-        output = model.apply(params, None, batch, embeddings)
-        all_metrics.append(compute_metrics(output.logits, batch.labels))
+        logits = eval_step(params, tables, batch)
+        all_metrics.append(compute_metrics(logits, batch.labels))
 
     return {k: sum(m[k] for m in all_metrics) / len(all_metrics) for k in all_metrics[0]}
-
 
 
 def save_checkpoint(step, params, tables, opt_state, checkpoint_dir):
@@ -111,14 +135,27 @@ def save_checkpoint(step, params, tables, opt_state, checkpoint_dir):
 
 def main(args):
     logger.info("="*70)
-    logger.info("E-commerce Ranking Model Training")
+    logger.info("E-commerce Ranking Model Training (JIT-compiled)")
     logger.info("="*70)
 
+    # Verify GPU
+    devices = jax.devices()
+    backend = jax.default_backend()
+    logger.info(f"\nJAX devices: {devices}")
+    logger.info(f"JAX backend: {backend}")
 
+    if backend != 'gpu':
+        logger.error("ERROR: Not using GPU! Training will be 100x slower.")
+        logger.error("Please install JAX with CUDA support: pip install 'jax[cuda12]'")
+        raise RuntimeError("GPU not detected")
+    else:
+        logger.info("✓ GPU detected - training will be fast!")
+
+    # Load data
     train_data = EcommerceDataset('data/processed', split='train')
     val_data = EcommerceDataset('data/processed', split='val')
 
-
+    # Model config
     config = EcommerceModelConfig(
         emb_size=args.emb_size,
         num_actions=3,
@@ -139,7 +176,7 @@ def main(args):
     logger.info(f"\nConfig: emb={args.emb_size}, layers={args.num_layers}, "
                 f"history={args.history_len}, candidates={args.candidate_len}")
 
-
+    # Initialize model
     model = create_ecommerce_ranking_model(config)
     rng = jax.random.PRNGKey(args.seed)
     rng_model, rng_emb = jax.random.split(rng)
@@ -158,15 +195,25 @@ def main(args):
     param_count = sum(x.size for x in jax.tree_util.tree_leaves(params))
     logger.info(f"Parameters: {param_count:,}")
 
-
+    # Optimizer
     optimizer = optax.adamw(learning_rate=args.lr, weight_decay=args.weight_decay)
     opt_state = optimizer.init(params)
 
-
+    # Action weights: transaction >> addtocart >> view
     action_weights = jnp.array([10.0, 3.0, 1.0])
     logger.info("Action weights: transaction=10.0, addtocart=3.0, view=1.0")
 
+    # Create JIT-compiled functions
+    logger.info("\nCompiling training and evaluation functions (JIT)...")
+    train_step = create_train_step(model, optimizer, action_weights)
+    eval_step = create_eval_step(model)
 
+    # Warmup JIT compilation
+    logger.info("Warming up JIT compilation (first iteration is slow)...")
+    _ = train_step(params, tables, opt_state, dummy_batch)
+    logger.info("✓ JIT compilation complete - training will be fast now!")
+
+    # Training loop
     logger.info(f"\nTraining: {args.epochs} epochs, {args.steps_per_epoch} steps/epoch, "
                 f"batch_size={args.batch_size}")
 
@@ -181,24 +228,26 @@ def main(args):
 
         for _ in pbar:
             batch = train_data.get_batch(args.batch_size, args.history_len, args.candidate_len)
-            params, opt_state, metrics = train_step(
-                params, tables, opt_state, batch, model, optimizer, action_weights
-            )
+            params, opt_state, loss, logits = train_step(params, tables, opt_state, batch)
+
+            # Compute metrics (transfer to CPU for logging)
+            metrics = compute_metrics(logits, batch.labels)
+            metrics['loss'] = float(loss)
 
             epoch_metrics.append(metrics)
             global_step += 1
 
             pbar.set_postfix({'loss': f"{metrics['loss']:.4f}", 'acc': f"{metrics['accuracy']:.3f}"})
 
-
+        # Epoch summary
         avg_loss = sum(m['loss'] for m in epoch_metrics) / len(epoch_metrics)
         avg_acc = sum(m['accuracy'] for m in epoch_metrics) / len(epoch_metrics)
         logger.info(f"Train: loss={avg_loss:.4f}, acc={avg_acc:.3f}")
 
-
+        # Validation
         if (epoch + 1) % args.eval_every == 0:
             val_metrics = evaluate(
-                params, tables, val_data, model, args.eval_batches,
+                eval_step, params, tables, val_data, args.eval_batches,
                 args.batch_size, args.history_len, args.candidate_len
             )
             logger.info(f"Val: acc={val_metrics['accuracy']:.3f}")
@@ -209,7 +258,7 @@ def main(args):
 
     # Final save
     logger.info("\n"+"="*70)
-    logger.info("Training complete")
+    logger.info("Training complete!")
     save_checkpoint(global_step, params, tables, opt_state, args.checkpoint_dir)
 
 

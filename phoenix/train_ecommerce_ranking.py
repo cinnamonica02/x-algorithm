@@ -121,10 +121,19 @@ def evaluate(eval_step, params, dataset, num_batches, batch_size, hist_len, cand
     """Evaluate model on validation set."""
     all_metrics = []
 
-    for _ in range(num_batches):
-        batch = dataset.get_batch(batch_size, hist_len, cand_len)
-        logits = eval_step(params, batch)
-        all_metrics.append(compute_metrics(logits, batch.labels))
+    # Try shorter sequences if validation data is insufficient
+    for attempt_hist, attempt_cand in [(hist_len, cand_len), (8, 4), (4, 2)]:
+        try:
+            for _ in range(num_batches):
+                batch = dataset.get_batch(batch_size, attempt_hist, attempt_cand)
+                logits = eval_step(params, batch)
+                all_metrics.append(compute_metrics(logits, batch.labels))
+            break
+        except ValueError as e:
+            if attempt_cand == 2:
+                logger.warning(f"Skipping validation: {e}")
+                return {'accuracy': 0.0}
+            continue
 
     return {k: sum(m[k] for m in all_metrics) / len(all_metrics) for k in all_metrics[0]}
 

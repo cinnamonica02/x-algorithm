@@ -32,21 +32,29 @@ def create_embedding_tables(vocab_sizes, emb_size, rng):
     """Create hash embedding tables for customer, product, and brand."""
     rng_customer, rng_product, rng_brand = jax.random.split(rng, 3)
 
-    return {
-        'customer': jax.random.normal(rng_customer, (vocab_sizes['customer'], emb_size)) * 0.02,
-        'product': jax.random.normal(rng_product, (vocab_sizes['product'], emb_size)) * 0.02,
-        'brand': jax.random.normal(rng_brand, (vocab_sizes['brand'], emb_size)) * 0.02,
-    }
+    # Return as tuple instead of dict for JAX compatibility
+    customer_table = jax.random.normal(rng_customer, (vocab_sizes['customer'], emb_size)) * 0.02
+    product_table = jax.random.normal(rng_product, (vocab_sizes['product'], emb_size)) * 0.02
+    brand_table = jax.random.normal(rng_brand, (vocab_sizes['brand'], emb_size)) * 0.02
+
+    return (customer_table, product_table, brand_table)
 
 
 def lookup_embeddings(batch, tables):
-    """Look up embeddings from hash tables."""
+    """Look up embeddings from hash tables.
+
+    Args:
+        batch: EcommerceBatch with hash indices
+        tables: Tuple of (customer_table, product_table, brand_table)
+    """
+    customer_table, product_table, brand_table = tables
+
     return EcommerceEmbeddings(
-        customer_embeddings=tables['customer'][batch.customer_hashes],
-        history_product_embeddings=tables['product'][batch.history_product_hashes],
-        candidate_product_embeddings=tables['product'][batch.candidate_product_hashes],
-        history_brand_embeddings=tables['brand'][batch.history_brand_hashes],
-        candidate_brand_embeddings=tables['brand'][batch.candidate_brand_hashes],
+        customer_embeddings=customer_table[batch.customer_hashes],
+        history_product_embeddings=product_table[batch.history_product_hashes],
+        candidate_product_embeddings=product_table[batch.candidate_product_hashes],
+        history_brand_embeddings=brand_table[batch.history_brand_hashes],
+        candidate_brand_embeddings=brand_table[batch.candidate_brand_hashes],
     )
 
 

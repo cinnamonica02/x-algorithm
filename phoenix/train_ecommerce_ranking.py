@@ -76,11 +76,11 @@ def compute_metrics(logits, labels):
     return metrics
 
 
-def create_train_step(model, optimizer, weights):
-    """Create JIT-compiled training step function."""
+def create_train_step(model, optimizer, weights, tables):
+    """Create JIT-compiled training step function with tables baked in."""
 
     @jax.jit
-    def train_step_jit(params, tables, opt_state, batch):
+    def train_step_jit(params, opt_state, batch):
         """Single training step with gradient update (JIT-compiled)."""
         def loss_fn(params):
             embeddings = lookup_embeddings(batch, tables)
@@ -97,11 +97,11 @@ def create_train_step(model, optimizer, weights):
     return train_step_jit
 
 
-def create_eval_step(model):
-    """Create JIT-compiled evaluation step."""
+def create_eval_step(model, tables):
+    """Create JIT-compiled evaluation step with tables baked in."""
 
     @jax.jit
-    def eval_step_jit(params, tables, batch):
+    def eval_step_jit(params, batch):
         embeddings = lookup_embeddings(batch, tables)
         output = model.apply(params, None, batch, embeddings)
         return output.logits
@@ -109,13 +109,13 @@ def create_eval_step(model):
     return eval_step_jit
 
 
-def evaluate(eval_step, params, tables, dataset, num_batches, batch_size, hist_len, cand_len):
+def evaluate(eval_step, params, dataset, num_batches, batch_size, hist_len, cand_len):
     """Evaluate model on validation set."""
     all_metrics = []
 
     for _ in range(num_batches):
         batch = dataset.get_batch(batch_size, hist_len, cand_len)
-        logits = eval_step(params, tables, batch)
+        logits = eval_step(params, batch)
         all_metrics.append(compute_metrics(logits, batch.labels))
 
     return {k: sum(m[k] for m in all_metrics) / len(all_metrics) for k in all_metrics[0]}
@@ -205,12 +205,12 @@ def main(args):
 
     # Create JIT-compiled functions
     logger.info("\nCompiling training and evaluation functions (JIT)...")
-    train_step = create_train_step(model, optimizer, action_weights)
-    eval_step = create_eval_step(model)
+    train_step = create_train_step(model, optimizer, action_weights, tables)
+    eval_step = create_eval_step(model, tables)
 
     # Warmup JIT compilation
     logger.info("Warming up JIT compilation (first iteration is slow)...")
-    _ = train_step(params, tables, opt_state, dummy_batch)
+    _ = train_step(params, opt_state, dummy_batch)
     logger.info("✓ JIT compilation complete - training will be fast now!")
 
     # Training loop
@@ -228,7 +228,7 @@ def main(args):
 
         for _ in pbar:
             batch = train_data.get_batch(args.batch_size, args.history_len, args.candidate_len)
-            params, opt_state, loss, logits = train_step(params, tables, opt_state, batch)
+            params, opt_state, loss, logits = train_step(params, opt_state, batch)
 
             # Compute metrics (transfer to CPU for logging)
             metrics = compute_metrics(logits, batch.labels)
@@ -247,7 +247,7 @@ def main(args):
         # Validation
         if (epoch + 1) % args.eval_every == 0:
             val_metrics = evaluate(
-                eval_step, params, tables, val_data, args.eval_batches,
+                eval_step, params, val_data, args.eval_batches,
                 args.batch_size, args.history_len, args.candidate_len
             )
             logger.info(f"Val: acc={val_metrics['accuracy']:.3f}")

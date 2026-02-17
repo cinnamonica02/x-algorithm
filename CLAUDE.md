@@ -41,12 +41,17 @@ This repository also includes work to adapt X's architecture to e-commerce produ
 
 ### ⚠️ CRITICAL: GPU Setup Issue
 
-**Problem:** Using `uv sync` installs the wrong JAX version (CPU-only), making training 100x slower.
+**Problem:** `pyproject.toml` cannot install GPU-enabled JAX because it requires a custom repository. The default `uv sync` installs CPU-only JAX, making training 100x slower.
+
+**Why this happens:**
+- `jax[cuda12]` from PyPI = **CPU-only** (despite the name!)
+- `jax[cuda12_pip]` from Google's repository = **actual GPU support**
+- pip/uv cannot specify custom repositories in pyproject.toml
 
 **Solution:**
 ```bash
 cd phoenix
-bash setup_gpu.sh  # Use this script instead
+bash setup_gpu.sh  # Installs JAX from Google's GPU repository
 ```
 
 The training script will check for GPU and refuse to run on CPU. See Installation section below for details.
@@ -111,8 +116,11 @@ The training script will check for GPU and refuse to run on CPU. See Installatio
 ```bash
 cd phoenix
 
-# Automated setup (recommended)
+# Automated setup (installs everything - JAX + other deps)
 bash setup_gpu.sh
+
+# DO NOT run "uv sync" after this!
+# It will overwrite GPU JAX with CPU-only JAX
 
 # Verify GPU detection
 python -c "import jax; print('Backend:', jax.default_backend()); print('Devices:', jax.devices())"
@@ -131,7 +139,13 @@ pip install "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax
 pip install dm-haiku optax tqdm pandas numpy
 ```
 
-**Why this matters:** The training script checks for GPU and will refuse to run on CPU (100x slower). The `-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html` flag is REQUIRED - GPU-enabled JAX is not on standard PyPI.
+**Why this matters:**
+- GPU-enabled JAX is NOT on standard PyPI - it requires Google's special repository
+- `pyproject.toml` cannot specify custom repositories, so `uv sync` installs CPU-only JAX
+- The training script checks for GPU and will refuse to run on CPU (100x slower)
+- The `-f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html` flag is REQUIRED
+
+**Design decision:** `pyproject.toml` now has CPU-only JAX as the default dependency. GPU users must use `setup_gpu.sh` or manual installation. This prevents confusion and ensures local development works with `uv sync`.
 
 See `RUNPOD_SETUP.md` for complete GPU setup guide and `phoenix/INSTALL.md` for troubleshooting.
 
@@ -143,19 +157,24 @@ cd phoenix
 pip install uv
 uv venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-uv sync
+uv sync  # Safe - installs CPU-only JAX for local testing
 ```
 
 **For local GPU:**
 ```bash
 cd phoenix
+
+# Option A: Use the setup script (recommended, installs everything)
+bash setup_gpu.sh
+# Done! Do NOT run "uv sync" after this.
+
+# Option B: Use uv, then fix JAX
 pip install uv
 uv venv
 source .venv/bin/activate
-# Install JAX with GPU support manually (don't use uv sync for this)
+uv sync  # Installs CPU-only JAX + other deps
+pip uninstall jax jaxlib -y  # Remove CPU-only JAX
 pip install "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-# Then install other deps
-pip install dm-haiku optax tqdm pandas numpy
 ```
 
 ## E-Commerce Implementation Files

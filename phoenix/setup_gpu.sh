@@ -1,6 +1,12 @@
 #!/bin/bash
 # GPU Setup Script for RunPod/Cloud Training
 # This script ensures JAX with CUDA support is installed correctly
+#
+# WHY THIS SCRIPT EXISTS:
+# - pyproject.toml cannot install GPU-enabled JAX (requires custom repository)
+# - "jax[cuda12]" from PyPI is CPU-only despite the misleading name
+# - GPU JAX must be installed with: pip install "jax[cuda12_pip]" -f https://...
+# - This script automates the correct installation
 
 set -e
 

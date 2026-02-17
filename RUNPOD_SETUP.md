@@ -54,8 +54,10 @@ cd /workspace/x-algorithm/phoenix  # or wherever you uploaded
 # Make script executable
 chmod +x setup_gpu.sh
 
-# Run setup (installs JAX with GPU support)
+# Run setup (installs JAX with GPU support + all other dependencies)
 bash setup_gpu.sh
+
+# DO NOT run "uv sync" after this - it will overwrite GPU JAX with CPU-only JAX!
 ```
 
 Expected output:

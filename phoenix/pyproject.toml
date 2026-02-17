@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "dm-haiku>=0.0.13",
-    "jax[cuda12]>=0.4.20",
+    "jax>=0.4.20",
     "numpy>=1.26.4",
     "pandas>=2.0.0",
     "optax>=0.2.0",
@@ -15,11 +15,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-cuda11 = [
-    "jax[cuda11_pip]>=0.4.20",
+# NOTE: GPU-enabled JAX cannot be installed via pyproject.toml
+# For GPU training, use: bash setup_gpu.sh
+# Or manually: pip install "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+cuda12 = [
+    "jax[cuda12]>=0.4.20",  # Placeholder - does NOT enable GPU, use setup_gpu.sh instead
 ]
-cpu = [
-    "jax>=0.4.20",
+cuda11 = [
+    "jax[cuda11_pip]>=0.4.20",  # Placeholder - does NOT enable GPU, use setup_gpu.sh instead
 ]
 
 [tool.uv]
